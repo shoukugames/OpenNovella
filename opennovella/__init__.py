@@ -8,6 +8,10 @@ __authors__ = ["Shawn Rapaz", "Claude Code"]
 __credits__ = "OpenNovella was created by Shawn Rapaz and Claude Code."
 __license__ = "GPL-3.0-or-later"
 
+# True when running in a web browser (pygbag / WebAssembly).
+import sys as _sys  # noqa: E402
+WEB = _sys.platform == "emscripten"
+
 import os as _os  # noqa: E402
 
 # PNG copies of the app logo (packaging/debian/opennovella.svg) for window icons

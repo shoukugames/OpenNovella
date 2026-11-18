@@ -27,7 +27,7 @@ import traceback
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame  # noqa: E402
 
-from . import ICON_DIR, __version__  # noqa: E402
+from . import ICON_DIR, WEB, __version__  # noqa: E402
 from .assets import AssetManager, hex_color  # noqa: E402
 from .engine import Engine, EngineError, Event  # noqa: E402
 from .story import POSITIONS, Story  # noqa: E402
@@ -966,8 +966,7 @@ class TitleScreen(Screen):
             ("Continue", p.continue_game, has_saves),
             ("Load", lambda: p.push(SaveLoadScreen(p, "load"))),
             ("Settings", lambda: p.push(SettingsScreen(p))),
-            ("Quit", p.quit),
-        ], top_frac=0.45, width_frac=0.26)
+        ] + ([] if WEB else [("Quit", p.quit)]), top_frac=0.45, width_frac=0.26)  # nothing to quit to in a browser
         p.play_music({"file": st["title_music"], "loop": True} if st.get("title_music") else None, fade=1.0)
 
     def handle(self, event, mouse):
@@ -1245,6 +1244,8 @@ class Player:
         self.start_scene = start_scene
 
         self.save_dir = self._find_save_dir()
+        if WEB:
+            self._restore_web_saves()
         self.prefs = {"text_speed": story.settings.get("text_speed", 45),
                       "auto_delay": story.settings.get("auto_delay", 1.5),
                       "music_volume": 70, "sound_volume": 80, "fullscreen": False, "save_page": 0}
@@ -1305,7 +1306,9 @@ class Player:
         return int(self.W * k), int(self.H * k)
 
     def _make_window(self):
-        if self.fullscreen:
+        if WEB:  # a fixed-size canvas; the page scales it to fit the browser window
+            self.window = pygame.display.set_mode((self.W, self.H))
+        elif self.fullscreen:
             self.window = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
             self.window = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
@@ -1362,7 +1365,7 @@ class Player:
         self.stack = [TitleScreen(self)]
 
     def quit(self):
-        self.running = False
+        self.running = WEB  # in a browser there is nothing to quit to
 
     def toast(self, text):
         self.toasts.append((text, self.clock_time + 2.0))
@@ -1381,10 +1384,33 @@ class Player:
             with open(path + ".tmp", "w", encoding="utf-8") as fh:
                 json.dump(data, fh, indent=1)
             os.replace(path + ".tmp", path)
+            if WEB:  # files vanish when the page closes: keep a copy in the browser's localStorage
+                try:
+                    import platform  # pygbag's bridge to the page
+                    platform.window.localStorage.setItem(self._web_key(name), json.dumps(data))
+                except Exception as exc:  # noqa: BLE001
+                    log.error("Could not keep %s in the browser: %s", name, exc)
             return True
         except OSError as exc:
             log.error("Could not write %s: %s", name, exc)
             return False
+
+    def _web_key(self, name):
+        return f"opennovella/{self.story.title}/{name}"
+
+    def _restore_web_saves(self):
+        """Browser: put the saves kept in localStorage back into the (fresh, empty) save folder."""
+        try:
+            import platform  # pygbag's bridge to the page
+            store = platform.window.localStorage
+            prefix = self._web_key("")
+            for i in range(int(store.length)):
+                key = str(store.key(i))
+                if key.startswith(prefix):
+                    with open(os.path.join(self.save_dir, key[len(prefix):]), "w", encoding="utf-8") as fh:
+                        fh.write(str(store.getItem(key)))
+        except Exception as exc:  # noqa: BLE001 - start without saves rather than fail
+            log.error("Could not restore saves from the browser: %s", exc)
 
     def save_prefs(self):
         self._write_json("settings.json", self.prefs)
@@ -1463,7 +1489,9 @@ class Player:
         fade_ms = int(max(0, fade) * 1000)
         if not music or not music.get("file"):
             if self.current_music:
-                pygame.mixer.music.fadeout(fade_ms) if fade_ms else pygame.mixer.music.stop()
+                # In a browser a new track would wait for this fade-out, which can't finish while
+                # the page waits: stop instead.
+                pygame.mixer.music.fadeout(fade_ms) if fade_ms and not WEB else pygame.mixer.music.stop()
             self.current_music = None
             return
         if self.current_music == music.get("file"):
@@ -1500,7 +1528,8 @@ class Player:
             self.window_size = (max(320, event.w), max(180, event.h))
             return
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_F11 or (event.key == pygame.K_RETURN and event.mod & pygame.KMOD_ALT):
+            if (event.key == pygame.K_F11 or (event.key == pygame.K_RETURN and event.mod & pygame.KMOD_ALT)) \
+                    and not WEB:
                 self.toggle_fullscreen()
                 return
         mouse = self.to_canvas(pygame.mouse.get_pos()) if not hasattr(event, "pos") else self.to_canvas(event.pos)
@@ -1560,6 +1589,18 @@ class Player:
             self.tick(dt, pygame.event.get())
         self.save_prefs()
         pygame.quit()
+
+    async def run_web(self):
+        """Browser main loop: hands control back to the page after every frame."""
+        import asyncio
+        clock = pygame.time.Clock()
+        while True:  # a web page has no "quit"; closing the tab ends the game
+            self.running = True
+            if self.window.get_size() != (self.W, self.H):
+                self.window = pygame.display.set_mode((self.W, self.H))  # pygbag may resize the canvas
+            dt = min(clock.tick(60) / 1000.0, 0.1)
+            self.tick(dt, pygame.event.get())
+            await asyncio.sleep(0)
 
 
 def write_crash_log(story_path: str | None, exc_text: str) -> str:

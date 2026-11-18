@@ -15,6 +15,7 @@ in git, or generate them with scripts.
 ## Contents
 
 - [Features](#features)
+- [Play in the browser](#play-in-the-browser)
 - [Installing](#installing)
 - [Your first visual novel in 5 minutes](#your-first-visual-novel-in-5-minutes)
 - [How stories work](#how-stories-work)
@@ -69,6 +70,22 @@ in git, or generate them with scripts.
 - Expressions are evaluated safely. A downloaded story can never run code on your computer
 
 ---
+
+## Play in the browser
+
+The demo story, *The Lantern Festival*, also runs in a web browser, on computers, phones and
+tablets, with nothing to install: <https://shoukugames.org/play/opennovella/> (test page). Tap or
+click to read on and choose. Saves and settings are kept in the browser. The editor needs a desktop
+(it is built with tkinter), so install OpenNovella to write your own stories.
+
+```bash
+python3 -m pip install pygame pygbag     # plus ffmpeg on PATH (or FFMPEG=/path/to/ffmpeg)
+python3 tools/build_web.py               # -> build/web/: upload the folder as-is
+```
+
+The build draws the demo's artwork (`examples/demo/make_art.py`), copies the player without the
+editor into `build/web-src/` and packs it with [pygbag](https://pygame-web.github.io/). `main.py` is
+the web entry point. The `.apk` file pygbag writes is its bundle of files, not an Android app.
 
 ## Installing
 
