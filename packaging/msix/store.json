@@ -1,0 +1,12 @@
+{
+ "_note": "Replace identity_name, publisher and publisher_display_name with the values from Partner Center (Product management -> Product identity) before uploading to the Microsoft Store.",
+ "identity_name": "ShoukuGames.OpenNovella",
+ "publisher": "CN=ShoukuGamesPlaceholder",
+ "publisher_display_name": "Shouku Games",
+ "display_name": "OpenNovella",
+ "description": "A friendly visual novel engine for writers of every skill level. Make branching stories with no code.",
+ "file_name": "OpenNovella",
+ "exe_name": "OpenNovella.exe",
+ "alias": "shouku-opennovella.exe",
+ "device_capabilities": []
+}
